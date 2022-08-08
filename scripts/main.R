@@ -92,6 +92,11 @@ source("scripts/tile_loop.R")
 
 # ******************************************************************************
 
+# delete folder of model files
+unlink(dir_model_files, recursive = T)
+
+
+# ******************************************************************************
 
 # s_tile <- tile
 # names(dim(s_tile)) <- c("lon", "lat", "var", "time")
