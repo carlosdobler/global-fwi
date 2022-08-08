@@ -55,7 +55,7 @@ rm(s_proxy_remo)
 
 dir_model_files <- str_glue("~/z_dir_wholefiles")
 
-if(ti > 1){
+if(ti <= 1){
   
   dir.create(dir_model_files)
   
