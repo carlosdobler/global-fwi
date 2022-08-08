@@ -54,28 +54,33 @@ rm(s_proxy_remo)
 # (~10 min)
 
 dir_model_files <- str_glue("z_dir_wholefiles")
-dir.create(dir_model_files)
 
-plan(multicore)
-{
-  tic()
-  future_pwalk(tb_files %>% filter(model == mod), function(file,
-                                                           var_long,
-                                                           dom_ = dom,
-                                                           dir_ = dir_model_files,
-                                                           ...){
-    
-    orig <- file %>%
-      {str_glue("gs://cmip5_data/RCM_regridded_data/CORDEX_22/{dom}/daily/{var_long}/{.}")}
-    
-    dest <- file %>%
-      {str_glue("{dir_}/{.}")}
-    
-    system(str_glue("gsutil cp {orig} {dest}"),
-           ignore.stdout = TRUE, ignore.stderr = TRUE)
-    
-  })
-  toc()
+if(ti > 1){
+  
+  dir.create(dir_model_files)
+  
+  plan(multicore)
+  {
+    tic()
+    future_pwalk(tb_files %>% filter(model == mod), function(file,
+                                                             var_long,
+                                                             dom_ = dom,
+                                                             dir_ = dir_model_files,
+                                                             ...){
+      
+      orig <- file %>%
+        {str_glue("gs://cmip5_data/RCM_regridded_data/CORDEX_22/{dom}/daily/{var_long}/{.}")}
+      
+      dest <- file %>%
+        {str_glue("{dir_}/{.}")}
+      
+      system(str_glue("gsutil cp {orig} {dest}"),
+             ignore.stdout = TRUE, ignore.stderr = TRUE)
+      
+    })
+    toc()
+  }
+  
 }
 
 
