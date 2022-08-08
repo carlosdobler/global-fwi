@@ -53,7 +53,7 @@ rm(s_proxy_remo)
 # DOWNLOAD MODEL FILES
 # (~10 min)
 
-dir_model_files <- str_glue("z_dir_wholefiles")
+dir_model_files <- str_glue("~/z_dir_wholefiles")
 
 if(ti > 1){
   
