@@ -1,8 +1,8 @@
 pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_ch, r, ...){
   
-  # r <- chunks_ind$r[1]
-  # lon_ch <- chunks_ind$lon_ch[1]
-  # lat_ch <- chunks_ind$lat_ch[1]
+  # r <- chunks_ind$r[20]
+  # lon_ch <- chunks_ind$lon_ch[20]
+  # lat_ch <- chunks_ind$lat_ch[20]
   
   print(str_glue(" "))
   print(str_glue("PROCESSING TILE {r} / {nrow(chunks_ind)}"))
@@ -15,8 +15,8 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
   # (~ 7 min)
   {
     tic(" -- everything loaded")
-    # plan(multicore, workers = 5)
-    map(vars, function(var_){  # future_?
+    plan(multicore, gc = T)
+    future_map(vars, function(var_){  # future_?
       
       # import
       tic(str_glue("         {var_} done!"))
@@ -54,7 +54,8 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
       
       if(length(dup) > 0){
         s %>% 
-          slice("time", -dup) -> s
+          slice("time", -dup) %>% 
+          suppressWarnings() -> s
         
         st_get_dimension_values(s, "time") -> d
         d %>% as.POSIXct() %>% suppressWarnings() %>% as_date() -> d
@@ -93,13 +94,37 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
       
       return(s)
       
-    }#,
-    #.options = furrr_options(seed = NULL)
+    },
+    .options = furrr_options(seed = NULL)
     ) -> l_s_vars
     
     toc()
   }
   
+  plan(sequential)
+  gc()
+  
+  
+  
+  # # HOMOGENEIZE TIME DIM
+  # l_s_vars %>%
+  #   map_int(~dim(.x)[3]) -> tdim
+  #   
+  # if(var(tdim) != 0){
+  #   
+  #   tdim %>% 
+  #     which.min() -> min_tdim
+  #   
+  #   l_s_vars %>% 
+  #     pluck(min_tdim) %>% 
+  #     st_get_dimension_values("time") -> min_time
+  #   
+  #   for(i in seq_len(4)[-min_tdim]){
+  #     l_s_vars[[i]] %>% 
+  #       filter(time %in% min_time) -> l_s_vars[[i]]
+  #   }
+  #   
+  # }
   
   
   
@@ -144,7 +169,8 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
         tidyr::pivot_wider(names_from = var, values_from = v) %>% 
         mutate(day = day(time), mon = month(time), yr = year(time)) %>% 
         select(-time) %>% 
-        rename_with(.cols = c(1,3:6), ~c("long", "rh", "ws", "temp", "prec"))
+        rename_with(.cols = c(1,3:6), ~c("long", "rh", "ws", "temp", "prec")) %>% 
+        mutate(across(.cols = c(rh, ws, prec), ~ifelse(.x < 0, 0, .x)))
       
     }) -> l_tb
     
@@ -163,9 +189,6 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
         } else {
           
           # tic()
-          tb %>% 
-            mutate(prec = ifelse(prec < 0, 0, prec)) -> tb
-          
           fwi(input = tb, init=c(85,6,15,tb$lat[1]), out = "fwi") %>% 
             suppressWarnings() %>% 
             as.matrix() %>% 
