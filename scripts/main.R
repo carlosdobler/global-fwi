@@ -1,7 +1,7 @@
 
 # INPUT SECTION
 
-dom <- "CAM"    # domain
+dom <- ""       # domain
 m <- 1          # model number
 ti <- 1         # starting tile 
 
@@ -15,6 +15,9 @@ source("scripts/mount.R")
 # load libraries
 # build table of files
 source("scripts/setup.R")
+
+tb_files %>% 
+  distinct(var, model, t_i, t_f, .keep_all = T) -> tb_files
 
 mod <- unique(tb_files$model)[m]
 
