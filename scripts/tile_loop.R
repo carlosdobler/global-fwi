@@ -1,8 +1,8 @@
 pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_ch, r, ...){
   
-  # r <- chunks_ind$r[20]
-  # lon_ch <- chunks_ind$lon_ch[20]
-  # lat_ch <- chunks_ind$lat_ch[20]
+  # r <- chunks_ind$r[1]
+  # lon_ch <- chunks_ind$lon_ch[1]
+  # lat_ch <- chunks_ind$lat_ch[1]
   
   print(str_glue(" "))
   print(str_glue("PROCESSING TILE {r} / {nrow(chunks_ind)}"))
@@ -15,7 +15,7 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
   # (~ 7 min)
   {
     tic(" -- everything loaded")
-    plan(multicore, gc = T)
+    plan(multicore)
     future_map(vars, function(var_){  # future_?
       
       # import
@@ -46,25 +46,38 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
       
       # fix duplicates and dates
       st_get_dimension_values(s, "time") -> d
-      d %>% as.POSIXct() %>% suppressWarnings() %>% as_date() -> d
+      # d %>% as.POSIXct() %>% suppressWarnings() %>% as_date() -> d
       
-      d %>% 
+      d %>%
         duplicated() %>% 
         which() -> dup
       
       if(length(dup) > 0){
+        
+        print(str_glue("  {var_} dupls: d[dup]"))
+        
         s %>% 
           slice("time", -dup) %>% 
           suppressWarnings() -> s
         
         st_get_dimension_values(s, "time") -> d
-        d %>% as.POSIXct() %>% suppressWarnings() %>% as_date() -> d
+        # d %>% as.POSIXct() %>% suppressWarnings() %>% as_date() -> d
       }
       
-      st_set_dimensions(s, 
-                        "time", 
-                        values = d) -> s
+      # st_set_dimensions(s, 
+      #                   "time", 
+      #                   values = d) -> s
       
+      # d %>%
+      #   as.character() %>% 
+      #   str_sub(end = 10) -> dd
+      # 
+      # str_c(rep(seq(1970,2099), each = 360), "-",
+      #       rep(seq(1,12), each = 30, times = 2099-1970+1) %>% str_pad(2, "left", "0"), "-",
+      #       rep(seq(1,30), times = 12*(2099-1970+1)) %>% str_pad(2, "left", "0")) -> d_comp
+      # 
+      # d_comp[which(!d_comp %in% dd)]
+        
       
       # change units
       if(str_detect(var_, "tas")){
@@ -109,21 +122,21 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
   # # HOMOGENEIZE TIME DIM
   # l_s_vars %>%
   #   map_int(~dim(.x)[3]) -> tdim
-  #   
+  # 
   # if(var(tdim) != 0){
-  #   
-  #   tdim %>% 
+  # 
+  #   tdim %>%
   #     which.min() -> min_tdim
-  #   
-  #   l_s_vars %>% 
-  #     pluck(min_tdim) %>% 
+  # 
+  #   l_s_vars %>%
+  #     pluck(min_tdim) %>%
   #     st_get_dimension_values("time") -> min_time
-  #   
+  # 
   #   for(i in seq_len(4)[-min_tdim]){
-  #     l_s_vars[[i]] %>% 
+  #     l_s_vars[[i]] %>%
   #       filter(time %in% min_time) -> l_s_vars[[i]]
   #   }
-  #   
+  # 
   # }
   
   
@@ -152,27 +165,49 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
     print(str_glue("processing col {lon_} / {length(dim_lon)}"))
     tic(str_glue("   done with col"))
     
+    l_s_vars %>% 
+      imap(function(s, i){
+        
+        s %>% 
+          .[,lon_,,]
+        
+      }) -> l_s_vars_col
+    
     plan(multicore, workers = 29, gc = T)
     
     # split into tables (1 per pixel)
-    map(seq_len(dim(l_s_vars[[1]])[2]), function(lat_){
+    tic()
+    future_map(seq_len(dim(l_s_vars[[1]])[2]), function(lat_){
       
-      l_s_vars %>% 
+      l_s_vars_col %>% 
         imap_dfr(function(s, i){
           
           s %>% 
-            .[,lon_,lat_,] %>% 
+            .[,,lat_,] %>% 
             as_tibble() %>% 
             mutate(var = i)
           
         }) %>% 
         tidyr::pivot_wider(names_from = var, values_from = v) %>% 
-        mutate(day = day(time), mon = month(time), yr = year(time)) %>% 
-        select(-time) %>% 
-        rename_with(.cols = c(1,3:6), ~c("long", "rh", "ws", "temp", "prec")) %>% 
-        mutate(across(.cols = c(rh, ws, prec), ~ifelse(.x < 0, 0, .x)))
+        rename_with(.cols = c(1, 4:7), ~c("long", "rh", "ws", "temp", "prec"))-> tb
+        
+      if(any(!is.na(tb$rh))){
+
+        tb %>%
+          mutate(day = as.integer(str_sub(time, 9,10)),
+                 mon = as.integer(str_sub(time, 6,7)),
+                 yr = as.integer(str_sub(time, 1,4))) %>%
+          select(-time) %>%
+          arrange(yr, mon, day) %>%
+          mutate(across(.cols = c(rh, ws, prec), ~ifelse(.x < 0, 0, .x))) %>%
+          mutate(across(.cols = c(rh, ws, temp, prec), ~imputeTS::na_interpolation(.x, maxgap = 7))) -> tb
+
+      }
+      
+      return(tb)
       
     }) -> l_tb
+    toc()
     
     
     # process tables (parallel)
@@ -180,7 +215,8 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
     l_tb %>% 
       future_map(function(tb){
         
-        if(all(is.na(tb$rh))){
+        # if(all(is.na(tb$rh))){
+        if("time" %in% names(tb)){
           
           matrix(NA, nrow(tb), 7) #-> m
           # colnames(m) <- c("FFMC", "DMC", "DC", "ISI", "BUI", "FWI", "DSR")
@@ -197,8 +233,9 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
           
         }
         
-      },
-      .options = furrr_options(seed = NULL)) -> l_fwi
+      }#,
+      #.options = furrr_options(seed = NULL)
+      ) -> l_fwi
     toc()
     
     plan(sequential)
@@ -225,6 +262,24 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
   
   # SAVE TILE AS NC
   {
+    
+    l_s_vars %>%
+      map_int(~dim(.x)[3]) -> tdim
+
+    tdim %>%
+        which.max() -> max_tdim
+    
+    l_s_vars[[max_tdim]] %>% 
+      st_get_dimension_values(3) -> d
+    
+    if(str_glue("{str_sub(d[1], 1,4)}-02-30") %in% str_sub(d, 1, 10)){
+      cal <- "360_day"
+    } else {
+      cal <- "365"
+    }
+    
+    
+    
     # define dimensions
     dim_lon <- ncdf4::ncdim_def(name = "lon", 
                                 units = "degrees_east", 
@@ -235,12 +290,16 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
                                 vals = l_s_vars[[1]] %>% st_get_dimension_values(2))
     
     dim_time <- ncdf4::ncdim_def(name = "time", 
-                                 units = "days since 1970-01-01", 
-                                 vals = l_s_vars[[1]] %>% 
-                                   st_get_dimension_values(3) %>% 
-                                   # as.character() %>% 
-                                   # as_date() %>% 
-                                   as.integer())
+                                 # units = "days since 1970-01-01", 
+                                 units = str_glue("days since {str_sub(d[1], 1,10)}"),
+                                 # vals = l_s_vars[[1]] %>% 
+                                 #   st_get_dimension_values(3) %>% 
+                                 #   # as.character() %>% 
+                                 #   # as_date() %>% 
+                                 #   as.integer()
+                                 vals = seq(0, length(d)-1),
+                                 calendar = cal
+                                 )
     
     # define variables
     c("ffmc", "dmc", "dc", "isi", "bui", "fwi", "dsr") %>% 
@@ -250,7 +309,11 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
                             missval = -9999)) -> varis
     
     # create empty nc file
-    ncnew <- ncdf4::nc_create(filename = str_glue("{dir_tiles}/{dom}_{mod}_{str_pad(r, 3, 'left', '0')}.nc"), 
+    # ncnew <- ncdf4::nc_create(filename = str_glue("{dir_tiles}/{dom}_{mod}_{str_pad(r, 3, 'left', '0')}.nc"), 
+    #                           vars = varis,
+    #                           force_v4 = TRUE)
+    
+    ncnew <- ncdf4::nc_create(filename = "test.nc", 
                               vars = varis,
                               force_v4 = TRUE)
     
