@@ -54,7 +54,7 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
       
       if(length(dup) > 0){
         
-        print(str_glue("  {var_} dupls: d[dup]"))
+        print(str_glue("  {var_} dupls: {d[dup]}"))
         
         s %>% 
           slice("time", -dup) %>% 
@@ -176,7 +176,6 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
     plan(multicore, workers = 29, gc = T)
     
     # split into tables (1 per pixel)
-    tic()
     future_map(seq_len(dim(l_s_vars[[1]])[2]), function(lat_){
       
       l_s_vars_col %>% 
@@ -200,14 +199,13 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
           select(-time) %>%
           arrange(yr, mon, day) %>%
           mutate(across(.cols = c(rh, ws, prec), ~ifelse(.x < 0, 0, .x))) %>%
-          mutate(across(.cols = c(rh, ws, temp, prec), ~imputeTS::na_interpolation(.x, maxgap = 7))) -> tb
+          mutate(across(.cols = c(rh, ws, temp, prec), ~na_interpolation(.x, maxgap = 7))) -> tb
 
       }
       
       return(tb)
       
     }) -> l_tb
-    toc()
     
     
     # process tables (parallel)
@@ -309,11 +307,7 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
                             missval = -9999)) -> varis
     
     # create empty nc file
-    # ncnew <- ncdf4::nc_create(filename = str_glue("{dir_tiles}/{dom}_{mod}_{str_pad(r, 3, 'left', '0')}.nc"), 
-    #                           vars = varis,
-    #                           force_v4 = TRUE)
-    
-    ncnew <- ncdf4::nc_create(filename = "test.nc", 
+    ncnew <- ncdf4::nc_create(filename = str_glue("{dir_tiles}/{dom}_{mod}_{str_pad(r, 3, 'left', '0')}.nc"),
                               vars = varis,
                               force_v4 = TRUE)
     
