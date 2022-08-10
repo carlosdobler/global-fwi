@@ -9,6 +9,7 @@ library(stars)
 library(units)
 library(furrr)
 library(tictoc)
+library(imputeTS)
 
 # enable multicore
 options(future.fork.enable = T)
