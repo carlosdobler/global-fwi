@@ -22,6 +22,7 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
       tic(str_glue("         {var_} done!"))
       
       tb_files %>% 
+        filter(year(as_date(t_i)) >= 1970) %>% 
         filter(model == mod,
                var == var_) %>%
         
