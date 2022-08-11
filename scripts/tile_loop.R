@@ -15,7 +15,7 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
   # (~ 7 min)
   {
     tic(" -- everything loaded")
-    plan(multicore)
+    plan(multicore, gc = T)
     future_map(vars, function(var_){  # future_?
       
       # import
@@ -238,6 +238,7 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
     toc()
     
     plan(sequential)
+    gc()
     
     # abind into array (dims = time, vars, lat)
     l_fwi %>% 
