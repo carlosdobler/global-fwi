@@ -16,7 +16,7 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
   {
     tic(" -- everything loaded")
     plan(multicore, gc = T)
-    future_map(vars, function(var_){  # future_?
+    map(vars, function(var_){  # future_?
       
       # import
       tic(str_glue("         {var_} done!"))
@@ -27,7 +27,7 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
                var == var_) %>%
         
         
-        pmap(function(file, t_i, t_f, dir_ = dir_model_files, r_ = r, ...){
+        future_pmap(function(file, t_i, t_f, dir_ = dir_model_files, r_ = r, ...){
           
           # print(file)
           
@@ -41,7 +41,8 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
             read_ncdf(ncsub = ncs) %>%
             suppressMessages()
           
-        }) %>% 
+        },
+        .options = furrr_options(seed = NULL)) %>%
         do.call(c, .) %>% 
         setNames("v") -> s
       
@@ -108,8 +109,8 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
       
       return(s)
       
-    },
-    .options = furrr_options(seed = NULL)
+    }#,
+    #.options = furrr_options(seed = NULL)
     ) -> l_s_vars
     
     toc()
