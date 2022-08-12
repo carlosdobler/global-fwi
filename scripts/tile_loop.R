@@ -79,7 +79,7 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
       #       rep(seq(1,30), times = 12*(2099-1970+1)) %>% str_pad(2, "left", "0")) -> d_comp
       # 
       # d_comp[which(!d_comp %in% dd)]
-        
+      
       
       # change units
       if(str_detect(var_, "tas")){
@@ -191,9 +191,9 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
         }) %>% 
         tidyr::pivot_wider(names_from = var, values_from = v) %>% 
         rename_with(.cols = c(1, 4:7), ~c("long", "rh", "ws", "temp", "prec"))-> tb
-        
+      
       if(any(!is.na(tb$rh))){
-
+        
         tb %>%
           mutate(day = as.integer(str_sub(time, 9,10)),
                  mon = as.integer(str_sub(time, 6,7)),
@@ -202,7 +202,7 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
           arrange(yr, mon, day) %>%
           mutate(across(.cols = c(rh, ws, prec), ~ifelse(.x < 0, 0, .x))) %>%
           mutate(across(.cols = c(rh, ws, temp, prec), ~na_interpolation(.x, maxgap = 7))) -> tb
-
+        
       }
       
       return(tb)
@@ -266,9 +266,9 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
     
     l_s_vars %>%
       map_int(~dim(.x)[3]) -> tdim
-
+    
     tdim %>%
-        which.max() -> max_tdim
+      which.max() -> max_tdim
     
     l_s_vars[[max_tdim]] %>% 
       st_get_dimension_values(3) -> d
@@ -300,7 +300,7 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
                                  #   as.integer()
                                  vals = seq(0, length(d)-1),
                                  calendar = cal
-                                 )
+    )
     
     # define variables
     c("ffmc", "dmc", "dc", "isi", "bui", "fwi", "dsr") %>% 
