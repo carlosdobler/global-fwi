@@ -1,4 +1,7 @@
 
+# source("~/disk_script.R")
+
+
 # INPUT SECTION
 
 dom <- ""       # domain
