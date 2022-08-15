@@ -275,8 +275,10 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
     
     if(str_glue("{str_sub(d[1], 1,4)}-02-30") %in% str_sub(d, 1, 10)){
       cal <- "360_day"
+    } else if ("1972-02-29" %in% str_sub(d, 1, 10)){
+      cal <- "gregorian"
     } else {
-      cal <- "365"
+      cal <- "365_day"
     }
     
     
@@ -323,8 +325,9 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
     ncdf4::nc_close(ncnew)
   }
   
-  
+  plan(sequential)
   rm(tile)
+  rm(l_s_vars)
   gc()
   
   toc()
