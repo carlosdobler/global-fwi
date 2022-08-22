@@ -36,6 +36,14 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
                           lat_chunks[[lat_ch]][2] - lat_chunks[[lat_ch]][1]+1,
                           NA)) -> ncs
           
+          if(dom == "EAS" & var_ == "sfcWind"){
+            cbind(start = c(lon_chunks[[lon_ch]][1], lat_chunks[[lat_ch]][1],1, 1),
+                  count = c(lon_chunks[[lon_ch]][2] - lon_chunks[[lon_ch]][1]+1,
+                            lat_chunks[[lat_ch]][2] - lat_chunks[[lat_ch]][1]+1,
+                            1,
+                            NA)) -> ncs
+          }
+          
           file %>%
             {str_glue("{dir_}/{.}")} %>% 
             read_ncdf(ncsub = ncs) %>%
@@ -115,6 +123,8 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
     
     toc()
   }
+  
+  adrop(l_s_vars[[2]]) -> l_s_vars[[2]]
   
   plan(sequential)
   gc()
@@ -273,9 +283,9 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
     l_s_vars[[max_tdim]] %>% 
       st_get_dimension_values(3) -> d
     
-    if(str_glue("{str_sub(d[1], 1,4)}-02-30") %in% str_sub(d, 1, 10)){
+    if(str_glue("{str_sub(d[365*50], 1,4)}-02-30") %in% str_sub(d, 1, 10)){
       cal <- "360_day"
-    } else if ("1972-02-29" %in% str_sub(d, 1, 10)){
+    } else if ("2032-02-29" %in% str_sub(d, 1, 10)){
       cal <- "gregorian"
     } else {
       cal <- "365_day"
