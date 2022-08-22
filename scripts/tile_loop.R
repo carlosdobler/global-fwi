@@ -283,7 +283,8 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
     l_s_vars[[max_tdim]] %>% 
       st_get_dimension_values(3) -> d
     
-    if(str_glue("{str_sub(d[365*50], 1,4)}-02-30") %in% str_sub(d, 1, 10)){
+
+    if(str_glue("{str_sub(d[350*50], 1,4)}-02-30") %in% str_sub(d, 1, 10)){
       cal <- "360_day"
     } else if ("2032-02-29" %in% str_sub(d, 1, 10)){
       cal <- "gregorian"
