@@ -213,6 +213,11 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
           mutate(across(.cols = c(rh, ws, prec), ~ifelse(.x < 0, 0, .x))) %>%
           mutate(across(.cols = c(rh, ws, temp, prec), ~na_interpolation(.x, maxgap = 7))) -> tb
         
+        if(dom == "EAS" & mod == "RegCM4_NCC-NorESM1-M"){
+          tb %>% 
+            filter(yr < 2100) -> tb
+        }
+        
       }
       
       return(tb)
