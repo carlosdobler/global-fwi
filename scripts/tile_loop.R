@@ -58,6 +58,20 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
       st_get_dimension_values(s, "time") -> d
       # d %>% as.POSIXct() %>% suppressWarnings() %>% as_date() -> d
       
+      if(dom == "EAS" & mod == "RegCM4_NCC-NorESM1-M"){
+        d %>% 
+          str_sub(1,4) %>% 
+          {. == "2100"} %>% 
+          which() -> over2100
+        
+        if(length(over2100 > 0)){
+          s %>% 
+            slice("time", -over2100) %>% 
+            suppressWarnings() -> s
+        }
+        
+      }
+      
       d %>%
         duplicated() %>% 
         which() -> dup
@@ -212,11 +226,6 @@ pwalk(st_drop_geometry(chunks_ind)[ti:nrow(chunks_ind),], function(lon_ch, lat_c
           arrange(yr, mon, day) %>%
           mutate(across(.cols = c(rh, ws, prec), ~ifelse(.x < 0, 0, .x))) %>%
           mutate(across(.cols = c(rh, ws, temp, prec), ~na_interpolation(.x, maxgap = 7))) -> tb
-        
-        if(dom == "EAS" & mod == "RegCM4_NCC-NorESM1-M"){
-          tb %>% 
-            filter(yr < 2100) -> tb
-        }
         
       }
       
