@@ -10,7 +10,7 @@ source("scripts/mount.R")
 
 # load libraries
 # build table of files
-source("scripts/setup.R")
+source(textConnection(readLines("scripts/setup.R")[1:16]))
 
 dir_mos <- str_glue("~/bucket_mine/results/global_fwi_ww/{dom}/mosaics")
 if(!dir.exists(dir_mos)){
@@ -43,7 +43,7 @@ sz <- 28
 
 source("scripts/tiling.R")
 
-# rm(s_proxy_remo)
+rm(s_proxy_remo)
 
 
 
@@ -64,9 +64,33 @@ for(mod in mods[-1]){
   
   print(str_glue(" "))
   print(str_glue("PROCESSING MODEL {which(mods == mod)} / {length(mods)}"))
-  print(str_glue("Preparing..."))
+  
+  
+  # copy files (tiles)
+  print(str_glue("Copying files..."))
+  tic("-- Done")
+  
+  dir_tiles <- "~/pers_disk/dir_tiles"                                                              # DIR TILES
+  dir.create(dir_tiles)
   
   str_glue("~/bucket_mine/results/global_fwi_ww/{dom}/") %>% 
+    list.files() %>% 
+    .[str_detect(., mod)] %>% 
+    future_walk(function(f){
+      
+      orig <- str_glue("gs://clim_data_reg_useast1/results/global_fwi_ww/{dom}/{f}")
+      dest <- str_glue("{dir_tiles}/{f}")
+
+      system(str_glue("gsutil cp {orig} {dest}"), ignore.stdout = TRUE, ignore.stderr = TRUE)
+      
+    })
+  toc()
+  
+  
+  print(str_glue("Preparing..."))
+  
+  # obtain date vector
+  dir_tiles %>% 
     list.files(full.names = T) %>% 
     .[str_detect(., mod)] %>% 
     .[1] %>% 
@@ -74,6 +98,7 @@ for(mod in mods[-1]){
     suppressMessages() %>% 
     st_get_dimension_values("time") -> d
   
+  # obtain years
   d %>% 
     str_sub(end = 4) %>% 
     unique() -> d_yrs
@@ -83,9 +108,10 @@ for(mod in mods[-1]){
   # split(d_yrs, 
   #       ceiling(seq_along(d_yrs)/(length(d_yrs)/n_lon))) -> yrs_chunks
   
+  # start/end timesteps per period
   # yrs_chunks %>% 
   d_yrs %>% 
-    map(function(y){
+    future_map(function(y){
       
       d %>% 
         str_sub(end = 4) %>% 
@@ -96,6 +122,7 @@ for(mod in mods[-1]){
     }) -> d_pos
   
   
+  # identify calendar type
   if(str_glue("{str_sub(d[350*50], 1,4)}-02-30") %in% str_sub(d, 1, 10)){
     cal <- "360_day"
   } else if ("2032-02-29" %in% str_sub(d, 1, 10)){
@@ -105,7 +132,7 @@ for(mod in mods[-1]){
   }
   
   
-  
+  # split tiles per rows
   unique(chunks_ind$lat_ch) %>% 
     as.numeric() %>% 
     sort() %>% 
@@ -116,30 +143,35 @@ for(mod in mods[-1]){
         str_pad(3, "left", "0")
     }) -> tiles
   
+  
+  # use "widest" row as longitude template
   tiles %>%
     map_int(length) %>%
     which.max() -> max_t
-
-  str_glue("~/bucket_mine/results/global_fwi_ww/{dom}/") %>%
+  
+  dir_tiles %>%
     list.files(full.names = T) %>%
     .[str_detect(., mod)] %>%
     .[str_detect(., str_flatten(tiles[[max_t]],"|"))] %>%
-
-    map(read_ncdf,
+    
+    future_map(read_ncdf,
         var = "fwi",
         ncsub = cbind(start = c(1,1,1),
-                      count = c(NA,NA,1))) %>%
+                      count = c(NA,NA,1)),
+        .options = furrr_options(seed = NULL)) %>%
     suppressMessages() %>%
     map(adrop) %>%
     {do.call(c, c(., along = 1))} -> row_max
   
-  # print(str_glue("Mosaicking"))
+  
+  print(str_glue("Mosaicking..."))
   
   d_pos %>%
     iwalk(function(d_p, i){
       
-      print(str_glue("Processing period {i} / {length(d_pos)}"))
-      tic(str_glue("  --Done with period"))
+      print(str_glue(" "))
+      print(str_glue("  Processing period {i} / {length(d_pos)}"))
+      tic(str_glue("  -- Done"))
       
       tiles %>%
         # .[3:5] %>% 
@@ -151,22 +183,40 @@ for(mod in mods[-1]){
           ff <- character()
           while(length(ff) == 0){
             
-            str_glue("~/bucket_mine/results/global_fwi_ww/{dom}") %>% 
+            dir_tiles %>% 
               list.files(full.names = T) %>% 
-              .[str_detect(., mod)] %>% 
+              # .[str_detect(., mod)] %>% 
               .[str_detect(., str_flatten(r,"|"))] -> ff 
             
           }
           
-          ff %>%   
+          # roww <- numeric()
+          # class(roww) <- "try-error"
+          # 
+          # while(class(roww) == "try-error"){
+          #   
+          #   try(ff %>%   
+          #         map(read_ncdf,
+          #             proxy = F,
+          #             var = "fwi", 
+          #             ncsub = cbind(start = c(1,1,d_p[1]),
+          #                           count = c(NA,NA,(d_p[2]-d_p[1]+1)))) %>%
+          #         
+          #         suppressMessages() %>% 
+          #         {do.call(c, c(., along = 1))}) -> roww
+          #   
+          # }
+          
+          ff %>%
             map(read_ncdf,
                 proxy = F,
-                var = "fwi", 
+                var = "fwi",
                 ncsub = cbind(start = c(1,1,d_p[1]),
                               count = c(NA,NA,(d_p[2]-d_p[1]+1)))) %>%
             
-            suppressMessages() %>% 
+            suppressMessages() %>%
             {do.call(c, c(., along = 1))} -> roww
+          
           
           matrix(NA, dim(row_max)[1], dim(roww)[2]) %>%
             st_as_stars() %>%
@@ -175,9 +225,9 @@ for(mod in mods[-1]){
             st_set_dimensions(2, name = "lat",
                               values = st_get_dimension_values(roww, "lat", center = F)) %>%
             st_set_crs(4326) -> mm
-
+          
           st_warp(roww, mm) -> roww_mm
-
+          
           # l_s %>% 
           #   map(function(s){
           #     
@@ -213,7 +263,7 @@ for(mod in mods[-1]){
       
       # **********
       
-      print(str_glue("Saving"))
+      print(str_glue("  Saving"))
       {
         # define dimensions
         dim_lon <- ncdf4::ncdim_def(name = "lon", 
@@ -256,6 +306,8 @@ for(mod in mods[-1]){
     }#,
     # .options = furrr_options(seed = NULL)
     )
+  
+  unlink(dir_tiles, recursive = T)
   
   
 }
