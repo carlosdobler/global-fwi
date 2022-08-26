@@ -1,5 +1,5 @@
 
-dom <- "EAS"       # domain
+dom <- ""       # domain
 
 
 # ******************************************************************************
@@ -10,7 +10,7 @@ source("scripts/mount.R")
 
 # load libraries
 # build table of files
-source(textConnection(readLines("scripts/setup.R")[1:16]))
+source(textConnection(readLines("scripts/setup.R")[4:16]))
 
 dir_mos <- str_glue("~/bucket_mine/results/global_fwi_ww/{dom}/mosaics")
 if(!dir.exists(dir_mos)){
@@ -220,11 +220,13 @@ for(mod in mods[-1]){
           
           matrix(NA, dim(row_max)[1], dim(roww)[2]) %>%
             st_as_stars() %>%
-            st_set_dimensions(1, name = "lon",
-                              values = st_get_dimension_values(row_max, "lon", center = F)) %>%
-            st_set_dimensions(2, name = "lat",
-                              values = st_get_dimension_values(roww, "lat", center = F)) %>%
+            st_set_dimensions(1, values = st_get_dimension_values(row_max, "lon", center = F)) %>%
+            st_set_dimensions(2, values = st_get_dimension_values(roww, "lat", center = F)) %>%
             st_set_crs(4326) -> mm
+          
+          mm %>%
+            st_set_dimensions(1, name = "lon") %>%
+            st_set_dimensions(2, name = "lat") -> mm
           
           st_warp(roww, mm) -> roww_mm
           
