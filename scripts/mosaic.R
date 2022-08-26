@@ -60,7 +60,7 @@ str_glue("~/bucket_mine/results/global_fwi_ww/{dom}/") %>%
 plan(multicore, gc = T)
 
 
-for(mod in mods[-1]){
+for(mod in mods){
   
   print(str_glue(" "))
   print(str_glue("PROCESSING MODEL {which(mods == mod)} / {length(mods)}"))
