@@ -164,8 +164,6 @@ for(dom in c("AFR", "AUS", "CAM", "CAS", "EAS", "EUR", "NAM", "SAM", "SEA", "WAS
         tiles %>%
           future_map(function(r){
             
-            # print(str_glue("   Processing row {ii} / {length(tiles)}"))
-            
             ff <- character()
             while(length(ff) == 0){
               
@@ -186,7 +184,6 @@ for(dom in c("AFR", "AUS", "CAM", "CAS", "EAS", "EUR", "NAM", "SAM", "SEA", "WAS
               suppressMessages() %>%
               {do.call(c, c(., along = 1))} -> roww
             
-            
             matrix(NA, length(ref_lon), dim(roww)[2]) %>%
               st_as_stars() %>%
               st_set_dimensions(1, values = ref_lon) %>%
@@ -198,6 +195,21 @@ for(dom in c("AFR", "AUS", "CAM", "CAS", "EAS", "EUR", "NAM", "SAM", "SEA", "WAS
               st_set_dimensions(2, name = "lat") -> mm
             
             st_warp(roww, mm) -> roww_mm
+            
+            roww_mm %>% 
+              st_dimensions() -> roww_mm_dim
+            
+            which(!round(st_get_dimension_values(mm, "lon", center = F),1) %in% round(st_get_dimension_values(roww, "lon"),1)) -> ind_not
+            
+            roww_mm %>% 
+              pull(1) -> roww_mm
+            
+            roww_mm[ind_not,,] <- NA
+            
+            roww_mm %>% 
+              st_as_stars() -> roww_mm
+            
+            st_dimensions(roww_mm) <- roww_mm_dim
             
             return(roww_mm)
             
