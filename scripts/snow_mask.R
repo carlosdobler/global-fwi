@@ -9,9 +9,10 @@ plan(multicore, gc = T)
 
 
 
-for(dom in c("AFR", "AUS", "CAM", "CAS", "EAS", "EUR", "NAM", "SAM", "SEA", "WAS")[2]){
+for(dom in c("AFR", "AUS", "CAM", "CAS", "EAS", "EUR", "NAM", "SAM", "SEA", "WAS")){
   
-  dom <- "SAM"
+  print(str_glue("PROCSSING DOM {dom}"))
+  # dom <- "AFR"
   
   dir_res <- str_glue("~/bucket_mine/results/global_fwi_ww/{dom}/mosaics_snw_mask")
   dir.create(dir_res)
@@ -96,21 +97,23 @@ for(dom in c("AFR", "AUS", "CAM", "CAS", "EAS", "EUR", "NAM", "SAM", "SEA", "WAS
     }
     
     
-
+    
     # obtain full dates vector
     f_all_fwi %>% 
-      future_map(function(f){
+      map(function(f){
         
         str_glue("{dir_fwi}/{f}") %>% 
-          read_ncdf(ncsub = cbind(start = c(1,1,1),
-                                  count = c(1,1,NA))) %>% 
+          # read_ncdf(ncsub = cbind(start = c(1,1,1),
+          #                         count = c(1,1,NA))) %>% 
+          read_stars(proxy = T) %>% 
           suppressMessages() %>% 
+          suppressWarnings() %>% 
           st_get_dimension_values("time")
         
-      },
-      .options = furrr_options(seed = NULL)
+      }#,
+      #.options = furrr_options(seed = NULL)
       ) -> d
-      
+    
     d %>% do.call(c, .) -> d
     
     if(str_glue("{str_sub(d[350*50], 1,4)}-02-30") %in% str_sub(d, 1, 10)){
@@ -140,7 +143,7 @@ for(dom in c("AFR", "AUS", "CAM", "CAS", "EAS", "EUR", "NAM", "SAM", "SEA", "WAS
                                 units = "degrees_north",
                                 vals = fwi_proxy %>% st_get_dimension_values(2, center = F))
     
-   
+    
     
     
     # PROCESS MASK
@@ -154,7 +157,7 @@ for(dom in c("AFR", "AUS", "CAM", "CAS", "EAS", "EUR", "NAM", "SAM", "SEA", "WAS
       
       # tic(str_glue("    Processed t {i} / {length(f_all_fwi)}"))
       
-      # f <- f_all_fwi[37]
+      # f <- f_all_fwi[63]
       
       str_glue("{dir_fwi}/{f}") %>%
         read_ncdf() %>% 
@@ -163,10 +166,10 @@ for(dom in c("AFR", "AUS", "CAM", "CAS", "EAS", "EUR", "NAM", "SAM", "SEA", "WAS
       s_fwi %>% 
         st_get_dimension_values("time") -> d_yr
       
-      s_fwi %>%
+      s_fwi %>% 
         st_set_dimensions("time",
-                          values = seq(1, dim(s_fwi)[3])) -> s_fwi
-      
+                          values = d_yr %>% 
+                            as.character()) -> s_fwi
       
       str_split(f, "_", simplify = T) %>% 
         .[,ncol(.)] %>% 
@@ -209,24 +212,61 @@ for(dom in c("AFR", "AUS", "CAM", "CAS", "EAS", "EUR", "NAM", "SAM", "SEA", "WAS
           
         }
         
-        s_snw %>%
-          st_set_dimensions("time",
-                            values = seq(1, dim(s_snw)[3])) -> s_snw
-        
         s_snw %>% 
           mutate(snw = drop_units(snw),
                  snw = ifelse(is.na(snw) | snw < 2, 0, 1)) -> s_snw
         
         
-        c(s_fwi, s_snw) %>%
-          # split("nd") %>%
-          # setNames(c("fwi", "snw")) %>%
-          mutate(fwi_m = ifelse(snw == 1 & !is.na(fwi), 0, fwi)) %>%
-          select(fwi_m) -> s_fwi_masked
+        which(!(st_get_dimension_values(s_fwi, "time") %in% st_get_dimension_values(s_snw, "time"))) -> missing_snw
+        
+        if(length(missing_snw) > 0){
+          
+          s_fwi %>% 
+            slice(time, -missing_snw) -> s_fwi_sub 
+          
+          if(any(dim(s_snw) != dim(s_fwi_sub))){
+            s_snw %>% 
+              st_warp(s_fwi_sub) -> s_snw
+          }
+            
+          st_dimensions(s_snw) <- st_dimensions(s_fwi_sub)
+          
+          c(s_fwi_sub, s_snw) %>% 
+            mutate(fwi_m = ifelse(snw == 1 & !is.na(fwi), 0, fwi)) %>%
+            select(fwi_m) -> s_fwi_masked
+          
+          s_fwi %>% 
+            slice(time, missing_snw) %>% 
+            c(s_fwi_masked) -> s_fwi_masked
+          
+          pmatch(d_yr, st_get_dimension_values(s_fwi_masked, "time")) -> p_m
+          
+          s_fwi_masked[,,,p_m] -> s_fwi_masked
+          
+        } else {
+          
+          try(c(s_fwi, s_snw)) -> fwi_snw
+          
+          if(class(fwi_snw) == "try-error"){
+            
+            s_snw %>% 
+              st_warp(s_fwi) -> s_snw
+            
+            c(s_fwi, s_snw) -> fwi_snw
+            
+          }
+          
+          fwi_snw %>%
+            # split("nd") %>%
+            # setNames(c("fwi", "snw")) %>%
+            mutate(fwi_m = ifelse(snw == 1 & !is.na(fwi), 0, fwi)) %>%
+            select(fwi_m) -> s_fwi_masked
+          
+        }
         
         
         
-        # create empty nc file
+
         # time dimension
         dim_time <- ncdf4::ncdim_def(name = "time",
                                      units = str_glue("days since {str_sub(d_yr[1], 1,10)}"),
